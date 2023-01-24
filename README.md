@@ -12,7 +12,7 @@ The maximum total prize pool for this competition is $700k. All amounts will pai
 
 The total prize amount to be paid out depends on the severity of the findings, as follows:
 
-1. The minimum contest pot is $75k. This amount will be paid out to reporters of Low Severity issues. (Yes, this is contrary to the usual Sherlock contest format).
+1. The minimum contest pot is $75k. This amount will be paid out to reporters of Low Severity issues. (Yes, this is contrary to the usual Sherlock contest format).
 2. If ANY valid Medium Severity issue is found, the contest pot increases to $250k.
 3. If ANY valid High severity issue is found, the contest pot increases to $700k.
 
@@ -119,9 +119,9 @@ Some of the most common smart contract vulnerabilities also apply here and are c
 - DoS Attacks on Critical services
     - **Explanation:** Any untrusted inputs which can result in a crash or otherwise cause a denial of service. Attack surfaces include but are not limited to P2P payloads, RPC payloads, blockchain state. Moreover, the network should even be robust against batches which could be posted by a malicious sequencer.
 
-### Execution layer vulnerabilities
+### **Execution layer vulnerabilities**
 
-Bedrock’s design aims for [EVM equivalence](https://medium.com/ethereum-optimism/introducing-evm-equivalence-5c2021deb306), meaning that smart contract developers should be able to safely deploy the same contracts to Optimism as they would on Ethereum, without concern for differences in the execution 
+Bedrock’s design aims for [EVM equivalence](https://medium.com/ethereum-optimism/introducing-evm-equivalence-5c2021deb306), meaning that smart contract developers should be able to safely deploy the same contracts to Optimism as they would on Ethereum, without concern for differences in the execution. 
 
 **Attack pattern to look for**
 
