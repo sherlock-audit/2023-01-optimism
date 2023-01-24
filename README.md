@@ -4,7 +4,7 @@
 - Submit findings using the issue page in your private contest repo (label issues as med or high)
 - [Read for more details](https://docs.sherlock.xyz/audits/watsons)
 
-### Disclaimer: Given the nature of the contest, the judging criteria differ from standard Sherlock judging rules. Severity definitions are custom defined by Optimism, and will be outlined on this page prior to the start of the competition.
+### Disclaimer: Given the nature of the contest, the judging criteria will differ from standard Sherlock judging rules. Severity definitions are custom defined by Optimism, and will be outlined on this page prior to the start of the competition.
 
 # Reward structure
 
