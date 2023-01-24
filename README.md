@@ -12,9 +12,11 @@ The maximum total prize pool for this competition is $700k. All amounts will pai
 
 The total prize amount to be paid out depends on the severity of the findings, as follows:
 
-1. The minimum contest pot is $75k. This amount will be paid out to reporters of Low Severity issues. (Yes, this is contrary to the usual Sherlock contest format).
+1. The minimum contest pot is $75k. This amount will be paid out to reporters of Low Severity issues. (Yes, this is contrary to the usual Sherlock contest format).
 2. If ANY valid Medium Severity issue is found, the contest pot increases to $250k.
 3. If ANY valid High severity issue is found, the contest pot increases to $700k.
+
+**Note:** There are effectively two separate pots in the contest: A $75k fixed pot for Low severity findings, and a variable pot ($0 to $625k) for High/Medium findings.
 
 # System context
 
@@ -64,77 +66,97 @@ The following issues are known and will not be accepted as valid findings:
     We have documented this risk and encourage users to take advantage of our CrossDomainMessenger contracts which provide additional safety measures.
     
 2. Some of the ‘legacy’ events in the `L1StandardBridge` and `L2StandardBrige` do not emit when expected.
+3. If the L1CrossDomainMessenger is paused, withdrawals sent to it will fail and not be replayable.
 
 # What to look for
 
 In order to guide you, we've attempted to outline as clearly as possible the the types of attacks we'd like you to pursue. Issues which do not match those described below will be considered, but are not guaranteed to be accepted. 
 
-## High Severity issues
+The remainder of this document is subdivided into sections based on the type of attack and then outlines the different severity attacks with
 
-### ************Bridge Vulnerabilities************
+# Client node vulnerabilities
 
-The following attacks focus on our bridge; especially how data and assets are transferred between the base chain (Goerli) and the rollup (Optimism Goerli). The majority bridge attacks would be possible due to an issue in the contracts, however there is also a critical interaction between the contracts on L1, and our fork of geth (op-geth) which is relevant (see below).
+The critical client node components are the op-node and op-geth services, which are written primarily in Go.
 
-**Attack patterns to seek out**
+## High
 
 - Bypass the deposit fee logic, causing the sequencer to improperly mint ETH on Optimism
-    - **Explanation:** The op-node service reads events which are emitted by the Optimism Portal contract on L1, and parses those events in order to create deposit transactions which can mint ETH on L2. Can you fool that logic into minting ETH, without actually having to deposit your ETH into the Optimism Portal contract?
+    - **Explanation:** The op-node service reads events which are emitted by the Optimism Portal contract on L1, and parses those events in order to create deposit transactions which can mint ETH on L2. This attack would require fooling this logic into minting ETH, without actually having to deposit ETH into the Optimism Portal contract.
+
+## Medium
+
+- Consensus failures
+    - **Explanation:** There is one sequencer (running the op-node and batcher services) submitting transaction batches to L1, but many verifier op-nodes will read these batches and check the results of its execution. The sequencer and verifiers must remain in consensus, even in the event of an L1 reorg. 
+    In addition, verifiers may operate in two different modes meaning that they either read “unsafe” blocks from the Sequencer, or only derive the L2 state from L1. Verifiers in either of these modes should all eventually agree about the finalized head.
+    Similarly, a verifier which is syncing the chain from scratch should agree with a verifier which has been running and is likely to have handled L1 reorgs.
+- DoS attacks on critical services
+    - **Explanation:** Any untrusted inputs which can result in a crash or otherwise cause a denial of service in the op-node or op-geth. Attack surfaces include but are not limited to P2P payloads, RPC payloads, and blockchain state. Moreover, the network should even be robust against batches which could be posted by a malicious sequencer.
+
+# EVM equivalence vulnerabilities
+
+Bedrock’s design aims for [EVM equivalence](https://medium.com/ethereum-optimism/introducing-evm-equivalence-5c2021deb306), meaning that smart contract developers should be able to safely deploy the same contracts to Optimism as they would on Ethereum, without concern for differences in the execution.
+
+An example of a bug which occurred in an earlier version of Optimism was an [ETH inflation attack](https://www.saurik.com/optimism.html) which resulted from a difference between the semantics of `SELFDESTRUCT` in Optimism vs. Ethereum.
+
+## High
+
+Findings that break contracts in a way that could cause people to lose funds and could be experienced with relatively high frequency by the average developer, or allows you to mint ETH, modify state of other contracts, generally cause loss of funds.
+
+## Medium
+
+Findings that break contracts but are difficult to trigger and only impact a very contrived or unusual contract, suggesting that a developer would have to go significantly out of their way to trigger the issue. 
+
+# Bridge vulnerabilities
+
+Naturally the security of our bridging contracts is critical as it holds all assets deposited from L1, and controls the creation of assets on L2.
+
+## High
+
 - Successfully replay a previously completed withdrawal
-    - **Explanation:** Because our bridge contracts are being upgraded from a previous state, it’s possible that a misconfiguration could cause previously completed withdrawals to be replayed. This is somewhat similar to the [Nomad bridge vulnerability](https://medium.com/nomad-xyz-blog/nomad-bridge-hack-root-cause-analysis-875ad2e5aacd).
+    - **Explanation:** Because our bridge contracts are being upgraded from a previous state, it’s possible that a misconfiguration could cause previously completed withdrawals to be replayed. This attack class is similar to the [Nomad bridge vulnerability](https://medium.com/nomad-xyz-blog/nomad-bridge-hack-root-cause-analysis-875ad2e5aacd).
 - Forge a withdrawal proof such that you can prove an invalid withdrawal
     - **Explanation:** We have a Solidity implementation of the Merkle Patricia Tree. Can you trick it into verifying the existence of a withdrawal which does not exist? This type of attack would be similar to that of the [Binance Bridge attack](https://www.zellic.io/blog/binance-bridge-hack-in-laymans-terms).
 - Bypass the two step withdrawal proof logic
-    - **Explanation:** In order to mitigate against possible bugs in our withdrawal proof, we’ve introduced a two step withdrawal process which requires users to prove their withdrawal at the beginning of the 7 day waiting period. We think it’s pretty clever, but would love to hear if you can find a way to get around it.
+    - **Explanation:** In order to mitigate against possible bugs in our withdrawal proof, we’ve introduced a two step withdrawal process which requires users to prove their withdrawal at the beginning of the 7 day waiting period.
 
-### **********************************Migration attacks**********************************
+# Generic smart contract issues
 
-During the migration from the legacy system to Bedrock, the Optimism network is temporarily halted, and undergoes a process of ‘state surgery’, which directly modifies the bytecode and storage of certain contracts. See if you can cause any of the above items to occur as a result of the state surgery.
+Some of the most common smart contract vulnerabilities also apply to our system and are critically important to mitigate.
 
-**Attack pattern to look for:**
-
-- Put the legacy system into a pre-migration state such that our migration scripts will result in any of the following:
-    1. User balances which do not match the legacy system
-    2. ETH minted or destroyed as a result of the migration
-    3. Contract state which does not match the legacy system (aside from that which is clearly intended to be modified)
-
-### Generic smart contract issues
-
-Some of the most common smart contract vulnerabilities also apply here and are critically important to mitigate.
-
-**Attack patterns to seek out**
+## High
 
 - Authorization bypass issues enabling an attacker to take actions which should be restricted to one of the system’s special actors, ie. Proposer, Challenger or Batch Submitter
-- Upgradability, proxy and configuration issues enabling
-- Unexpected reverts causing a system lockup (ie. due to overflows)
-- Any theft or freezing of funds issues.
+- Upgradability proxy and configuration issues enabling an attacker to re-initialize, take control
+- Unexpected reverts causing a system lockup. For example getting the system into a state where any call to a function would revert, possible due to an over/underflow, or other issue.
 
-## Medium Severity Issues
+## Medium
 
-### Infrastructure vulnerabilities
+- Attacks, including DoS and griefing, leading to temporary freezing of funds in the bridge.
 
-**Attack patterns to seek out**
+# Migration attacks
 
-- Causing a consensus failure
-    - **Explanation:** There is one sequencer op-node submitting transaction batches to L1, but many verifier op-nodes will read these batches and check the results of its execution. The sequencer and verifiers must remain in consensus, even in the event of an L1 reorg.
-- DoS Attacks on Critical services
-    - **Explanation:** Any untrusted inputs which can result in a crash or otherwise cause a denial of service. Attack surfaces include but are not limited to P2P payloads, RPC payloads, blockchain state. Moreover, the network should even be robust against batches which could be posted by a malicious sequencer.
+During the migration from the legacy system to Bedrock, the Optimism network is temporarily halted, and undergoes a process of ‘state surgery’, which directly modifies the bytecode and storage of certain contracts. 
 
-### **Execution layer vulnerabilities**
+Migration attacks would involve putting the legacy system into a pre-migration state such that our migration scripts will result in any of the following:
 
-Bedrock’s design aims for [EVM equivalence](https://medium.com/ethereum-optimism/introducing-evm-equivalence-5c2021deb306), meaning that smart contract developers should be able to safely deploy the same contracts to Optimism as they would on Ethereum, without concern for differences in the execution. 
+## High
 
-**Attack pattern to look for**
+- ETH is minted or destroyed as a result of the migration.
 
-- Differences in the programming model on Optimism, which result in unexpected vulnerabilities in contracts.
-    - **Example:** An example of a bug which occurred in an earlier version of Optimism was an [ETH inflation attack](https://www.saurik.com/optimism.html) which resulted from a difference between the semantics of `SELFDESTRUCT` in Optimism vs. Ethereum.
+## Medium
 
-## Low Severity Items
+- Contract state which does not match the legacy system (aside from that which is clearly intended to be modified)
+    - If this results in loss of funds or another high severity issue, it will be considered as such.
+
+# Specification errors
+
+All accepted specification errors are considered Low severity.
 
 Low severity issues are not typically included in Sherlock competitions, but are acceptable in this contest. However the only acceptable Low severity items are inconsistencies between the [specs](https://github.com/ethereum-optimism/optimism/tree/develop/specs) and the implementation.
 
-**Guidelines:**
+## Low severity
 
-Findings are restricted to factually incorrect information only, i.e. statements which describe something different from what that implementation actually does.
+Specification error findings are restricted to factually incorrect information only, i.e. statements which describe something different from what the implementation actually does.
 
 The following limitations apply:
 
